@@ -106,7 +106,6 @@ static bool IsLocalViewerSpectating() {
     const System* system = System::sInstance;
     if (system != nullptr) {
         if (system->IsContext(PULSAR_MODE_KO) && system->koMgr != nullptr && system->koMgr->isSpectating) return true;
-        if (system->lapKoMgr != nullptr && system->lapKoMgr->isSpectating) return true;
     }
     const Racedata* racedata = Racedata::sInstance;
     return racedata != nullptr && racedata->racesScenario.localPlayerCount == 0;
