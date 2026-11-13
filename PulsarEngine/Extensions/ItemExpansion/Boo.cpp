@@ -4,6 +4,8 @@
 #include <core/nw4r/snd/SoundStartable.hpp>
 #include <core/nw4r/snd/SoundArchivePlayer.hpp>
 #include <PulsarSystem.hpp>
+#include <Gamemodes/KO/KOMgr.hpp>
+#include <Gamemodes/LapKO/LapKOMgr.hpp>
 #include <MarioKartWii/Race/RaceInfo/RaceInfo.hpp>
 #include <include/c_math.h>
 #include <MarioKartWii/Kart/KartManager.hpp>
@@ -20,10 +22,10 @@
 #include <MarioKartWii/UI/Ctrl/CtrlRace/CtrlRaceBalloon.hpp>
 #include <MarioKartWii/Effect/EffectMgr.hpp>
 
-// Please make sure to credit SaucyCF (Saucy on Tockdom) if you decide to use or modify this code in your own project!
+// Please make sure to credit sarasalandon (Lanny on Tockdom) if you decide to use or modify this code in your own project!
 
 // Expanded behaviourTable in mod BSS (from ItemSlotExpansion.cpp)
-extern "C" Item::Behavior expandedBehaviourTable[27];
+extern "C" Item::Behavior expandedBehaviourTable[ITEM_MAX];
 
 namespace Pulsar {
 namespace Race {
@@ -101,8 +103,30 @@ static bool IsLocalRacePlayer(u8 playerId) {
     return Racedata::sInstance->racesScenario.players[playerId].playerType == PLAYER_REAL_LOCAL;
 }
 
+static bool IsLocalViewerSpectating() {
+    const System* system = System::sInstance;
+    if (system != nullptr) {
+        if (system->IsContext(PULSAR_MODE_KO) && system->koMgr != nullptr && system->koMgr->isSpectating) return true;
+        if (system->lapKoMgr != nullptr && system->lapKoMgr->isSpectating) return true;
+    }
+    const Racedata* racedata = Racedata::sInstance;
+    return racedata != nullptr && racedata->racesScenario.localPlayerCount == 0;
+}
+
+static bool CanHideBooPlayerCompletely(u8 playerId) {
+    return IsFullBooInvisibilityEnabled() && !IsLocalRacePlayer(playerId) && !IsLocalViewerSpectating();
+}
+
+enum BooVisual {
+    BOO_VISUAL_NORMAL,
+    BOO_VISUAL_TRANSPARENT,
+    BOO_VISUAL_INVISIBLE
+};
+static u8 booVisual[12] = {};
+
 static void SetBooEffectsVisibility(u8 playerId, bool visible, bool allowFullInvisibility) {
-    if (!allowFullInvisibility || !IsFullBooInvisibilityEnabled()) return;
+    if (visible) return;
+    if (!allowFullInvisibility) return;
 
     Effects::Mgr* effectsMgr = Effects::Mgr::sInstance;
     if (effectsMgr == nullptr || effectsMgr->players == nullptr) return;
@@ -111,10 +135,8 @@ static void SetBooEffectsVisibility(u8 playerId, bool visible, bool allowFullInv
     Effects::Player* playerEffects = effectsMgr->players[playerId];
     if (playerEffects == nullptr) return;
 
-    if (!visible) {
-        playerEffects->KillEffects(true);
-    }
-    playerEffects->Toggle(!visible);
+    playerEffects->KillEffects(true);
+    playerEffects->Toggle(true);
 }
 
 static void BooUpdateGasSmokeEffects(Effects::Player* playerEffects) {
@@ -122,7 +144,7 @@ static void BooUpdateGasSmokeEffects(Effects::Player* playerEffects) {
 
     if (IsBooModeActive() && IsFullBooInvisibilityEnabled() && playerEffects->kartPlayer != nullptr) {
         const u8 playerId = playerEffects->kartPlayer->GetPlayerIdx();
-        if (playerId < 12 && !IsLocalRacePlayer(playerId) && IsPlayerInBooState(playerId)) {
+        if (playerId < 12 && CanHideBooPlayerCompletely(playerId) && IsPlayerInBooState(playerId)) {
             playerEffects->KillEffects(true);
             return;
         }
@@ -365,54 +387,26 @@ static int GetPlayerItemCount(u8 playerId) {
     return Network::GetNetworkPlayerItemCount(playerId);
 }
 
-static void ApplyGhostTransparency(Kart::Pointers& pointers, bool transparent, bool allowFullInvisibility) {
-    const bool fullInvisibility = IsFullBooInvisibilityEnabled() && allowFullInvisibility;
-    const bool visible = !transparent;
-
-    u32 priority = transparent ? DRAW_OPTIONS_TRANSPARENT : DRAW_OPTIONS_NORMAL;
-
-    if (pointers.kartBody != nullptr && pointers.kartBody->isModelLoaded && HasValidVtable(pointers.kartBody)) {
-        if (fullInvisibility) {
-            pointers.kartBody->ToggleModelVisible(visible);
+template <class Fn>
+static void ForEachKartPart(Kart::Pointers& pointers, Fn fn) {
+    Kart::Body* body = pointers.kartBody;
+    if (body != nullptr && body->isModelLoaded && HasValidVtable(body)) {
+        fn(*body);
+        u8* const bodyBytes = reinterpret_cast<u8*>(body);
+        const bool isBike = pointers.values != nullptr && pointers.values->isBike != 0;
+        if (isBike) {
+            Kart::Part* handle = reinterpret_cast<Kart::Part*>(bodyBytes + 0x238);
+            Kart::Part* swingArm = reinterpret_cast<Kart::Part*>(bodyBytes + 0x2CC);
+            if (handle->isModelLoaded && HasValidVtable(handle)) fn(*handle);
+            if (swingArm->isModelLoaded && HasValidVtable(swingArm)) fn(*swingArm);
         }
-        pointers.kartBody->UpdateModelDrawPriority(priority);
-    }
-
-    DriverController* driver = pointers.driverController;
-    if (driver != nullptr && HasValidVtable(driver)) {
-        if (driver->driverModel != nullptr && HasValidVtable(driver->driverModel)) {
-            if (fullInvisibility) driver->driverModel->ToggleVisible(visible);
-            driver->driverModel->UpdateDrawPriority(priority);
-        }
-        if (driver->driverModel_lod != nullptr && HasValidVtable(driver->driverModel_lod)) {
-            if (fullInvisibility) driver->driverModel_lod->ToggleVisible(visible);
-            driver->driverModel_lod->UpdateDrawPriority(priority);
-        }
-        if (driver->miiHeads != nullptr && HasValidVtable(driver->miiHeads)) {
-            if (fullInvisibility) driver->miiHeads->ToggleVisible(visible);
-            driver->miiHeads->UpdateDrawPriority(priority);
-        }
-        if (driver->ticoModel != nullptr && HasValidVtable(driver->ticoModel) && 
-            driver->ticoModel->tico != nullptr && HasValidVtable(driver->ticoModel->tico)) {
-            if (fullInvisibility) driver->ticoModel->tico->ToggleVisible(visible);
-            driver->ticoModel->tico->UpdateDrawPriority(priority);
-        }
-        if (driver->toadetteHair != nullptr && HasValidVtable(driver->toadetteHair)) {
-            if (fullInvisibility) driver->toadetteHair->ToggleVisible(visible);
-            driver->toadetteHair->UpdateDrawPriority(priority);
-        }
-        if (driver->toadetteHair != nullptr && driver->toadetteHair->cb != nullptr && 
-            driver->toadetteHair->cb->hair != nullptr && HasValidVtable(driver->toadetteHair->cb->hair)) {
-            if (fullInvisibility) driver->toadetteHair->cb->hair->ToggleVisible(visible);
-            driver->toadetteHair->cb->hair->UpdateDrawPriority(priority);
-        }
-        u32 mdlCount = driver->mdlDirectorsCount;
-        if (mdlCount > 6) mdlCount = 6;
-        for (u32 modelIndex = 0; modelIndex < mdlCount; ++modelIndex) {
-            ModelDirector* model = driver->mdlDirectors[modelIndex];
-            if (model != nullptr && HasValidVtable(model)) {
-                if (fullInvisibility) model->ToggleVisible(visible);
-                model->UpdateDrawPriority(priority);
+        else if (bodyBytes[0x228] == 0) {
+            Kart::Part** arms = *reinterpret_cast<Kart::Part***>(bodyBytes + 0x238);
+            u16 armCount = *reinterpret_cast<u16*>(bodyBytes + 0x23C);
+            if (armCount > 4) armCount = 4;
+            for (u16 j = 0; arms != nullptr && j < armCount; ++j) {
+                Kart::Part* arm = arms[j];
+                if (arm != nullptr && arm->isModelLoaded && HasValidVtable(arm)) fn(*arm);
             }
         }
     }
@@ -420,29 +414,80 @@ static void ApplyGhostTransparency(Kart::Pointers& pointers, bool transparent, b
     if (pointers.values != nullptr && pointers.wheels != nullptr) {
         u16 wheelCount = pointers.values->wheelCount0;
         if (wheelCount > 4) wheelCount = 4;
-        
         for (u16 j = 0; j < wheelCount; ++j) {
-            if (pointers.wheels[j] != nullptr && pointers.wheels[j]->isModelLoaded && HasValidVtable(pointers.wheels[j])) {
-                if (fullInvisibility) pointers.wheels[j]->ToggleModelVisible(visible);
-                pointers.wheels[j]->UpdateModelDrawPriority(priority);
-            }
+            Kart::Wheel* wheel = pointers.wheels[j];
+            if (wheel != nullptr && wheel->isModelLoaded && HasValidVtable(wheel)) fn(*wheel);
         }
     }
 
     if (pointers.values != nullptr && pointers.suspensions != nullptr) {
         u16 suspCount = pointers.values->wheelCount1;
         if (suspCount > 4) suspCount = 4;
-        
         for (u16 j = 0; j < suspCount; ++j) {
-            if (pointers.suspensions[j] != nullptr && pointers.suspensions[j]->isModelLoaded && HasValidVtable(pointers.suspensions[j])) {
-                if (fullInvisibility) pointers.suspensions[j]->ToggleModelVisible(visible);
-                pointers.suspensions[j]->UpdateModelDrawPriority(priority);
-            }
+            Kart::Suspensions* susp = pointers.suspensions[j];
+            if (susp != nullptr && susp->isModelLoaded && HasValidVtable(susp)) fn(*susp);
         }
     }
+}
+
+template <class Fn>
+static void ForEachDriverModel(Kart::Pointers& pointers, Fn fn) {
+    DriverController* driver = pointers.driverController;
+    if (driver == nullptr || !HasValidVtable(driver)) return;
+    if (driver->driverModel != nullptr && HasValidVtable(driver->driverModel)) fn(*driver->driverModel);
+    if (driver->driverModel_lod != nullptr && HasValidVtable(driver->driverModel_lod)) fn(*driver->driverModel_lod);
+    if (driver->miiHeads != nullptr && HasValidVtable(driver->miiHeads)) fn(*driver->miiHeads);
+    if (driver->ticoModel != nullptr && HasValidVtable(driver->ticoModel)
+        && driver->ticoModel->tico != nullptr && HasValidVtable(driver->ticoModel->tico)) fn(*driver->ticoModel->tico);
+    if (driver->toadetteHair != nullptr && HasValidVtable(driver->toadetteHair)) {
+        fn(*driver->toadetteHair);
+        if (driver->toadetteHair->cb != nullptr && driver->toadetteHair->cb->hair != nullptr
+            && HasValidVtable(driver->toadetteHair->cb->hair)) fn(*driver->toadetteHair->cb->hair);
+    }
+    u32 mdlCount = driver->mdlDirectorsCount;
+    if (mdlCount > 6) mdlCount = 6;
+    for (u32 modelIndex = 0; modelIndex < mdlCount; ++modelIndex) {
+        ModelDirector* model = driver->mdlDirectors[modelIndex];
+        if (model != nullptr && HasValidVtable(model)) fn(*model);
+    }
+}
+
+struct SetPartVisible {
+    bool visible;
+    void operator()(Kart::Part& part) const { part.ToggleModelVisible(visible); }
+};
+struct SetPartDrawPriority {
+    u32 priority;
+    void operator()(Kart::Part& part) const { part.UpdateModelDrawPriority(priority); }
+};
+struct SetModelVisible {
+    bool visible;
+    void operator()(ModelDirector& model) const { model.ToggleVisible(visible); }
+};
+struct SetModelDrawPriority {
+    u32 priority;
+    void operator()(ModelDirector& model) const { model.UpdateDrawPriority(priority); }
+};
+
+static void SetBooKartModelsVisible(Kart::Pointers& pointers, bool visible) {
+    SetPartVisible partFn = { visible };
+    SetModelVisible modelFn = { visible };
+    ForEachKartPart(pointers, partFn);
+    ForEachDriverModel(pointers, modelFn);
+}
+
+static void ApplyBooVisual(Kart::Pointers& pointers, u8 from, u8 to) {
+    const u32 priority = (to == BOO_VISUAL_NORMAL) ? DRAW_OPTIONS_NORMAL : DRAW_OPTIONS_TRANSPARENT;
+    SetPartDrawPriority partFn = { priority };
+    SetModelDrawPriority modelFn = { priority };
+    ForEachKartPart(pointers, partFn);
+    ForEachDriverModel(pointers, modelFn);
+t.
+    if (to == BOO_VISUAL_INVISIBLE) SetBooKartModelsVisible(pointers, false);
+    else if (from == BOO_VISUAL_INVISIBLE) SetBooKartModelsVisible(pointers, true);
 
     if (pointers.kartShadow != nullptr && HasValidVtable(pointers.kartShadow)) {
-        pointers.kartShadow->EnableDraw(visible);
+        pointers.kartShadow->EnableDraw(to == BOO_VISUAL_NORMAL);
     }
 }
 
@@ -451,38 +496,10 @@ extern "C" char Vtable_CtrlRace2DMapCharacter_OnUpdate;
 extern "C" char Vtable_CtrlRaceNameBalloon_Draw;
 extern "C" void CtrlRaceNameBalloon_BaseDraw(CtrlRaceNameBalloon* nameBalloon, u32 curZIdx);
 
-struct BooRaceBalloonsShim {
-    u8 nameIsEnabled[3];
-    u8 arrayId;
-    u32 nameCount;
-    void* ctrlRaceNameBalloon[3];
-    s32 playerIds[3];
-};
-
 static s32 ResolveNameBalloonPlayerId(const CtrlRaceNameBalloon* nameBalloon) {
     if (nameBalloon == nullptr) return -1;
-
-    const s32 directId = static_cast<s32>(nameBalloon->nameSlotId);
-    if (directId >= 0 && directId < 12) return directId;
-
-    const BooRaceBalloonsShim* balloons = reinterpret_cast<const BooRaceBalloonsShim*>(nameBalloon->balloonClass);
-    if (balloons == nullptr) return -1;
-
-    const u32 slot = nameBalloon->nameSlotId;
-    if (slot < 3) {
-        const s32 slotPlayerId = balloons->playerIds[slot];
-        if (slotPlayerId >= 0 && slotPlayerId < 12) return slotPlayerId;
-    }
-
-    const u32 count = balloons->nameCount > 3 ? 3 : balloons->nameCount;
-    for (u32 i = 0; i < count; ++i) {
-        if (balloons->nameIsEnabled[i] != 0) {
-            const s32 slotPlayerId = balloons->playerIds[i];
-            if (slotPlayerId >= 0 && slotPlayerId < 12) return slotPlayerId;
-        }
-    }
-
-    return -1;
+    const s32 playerId = nameBalloon->playerId;
+    return (playerId >= 0 && playerId < 12) ? playerId : -1;
 }
 
 static void BooCtrlRace2DMapCharacterOnUpdate(CtrlRace2DMapCharacter* mapCharacter) {
@@ -491,7 +508,7 @@ static void BooCtrlRace2DMapCharacterOnUpdate(CtrlRace2DMapCharacter* mapCharact
     if (!IsBooModeActive() || !IsFullBooInvisibilityEnabled() || mapCharacter == nullptr) return;
 
     const u8 playerId = mapCharacter->playerId;
-    if (playerId < 12 && !IsLocalRacePlayer(playerId) && IsPlayerInBooState(playerId)) {
+    if (playerId < 12 && CanHideBooPlayerCompletely(playerId) && IsPlayerInBooState(playerId)) {
         mapCharacter->isHidden = true;
     }
 }
@@ -502,8 +519,8 @@ static void BooCtrlRaceNameBalloonDraw(CtrlRaceNameBalloon* nameBalloon, u32 cur
 
     if (IsBooModeActive() && IsFullBooInvisibilityEnabled()) {
         const s32 balloonPlayerId = ResolveNameBalloonPlayerId(nameBalloon);
-        if (balloonPlayerId >= 0 && balloonPlayerId < 12
-            && !IsLocalRacePlayer(static_cast<u8>(balloonPlayerId))
+        if (balloonPlayerId >= 0
+            && CanHideBooPlayerCompletely(static_cast<u8>(balloonPlayerId))
             && IsPlayerInBooState(static_cast<u8>(balloonPlayerId))) {
             nameBalloon->isHidden = true;
             return;
@@ -514,6 +531,12 @@ static void BooCtrlRaceNameBalloonDraw(CtrlRaceNameBalloon* nameBalloon, u32 cur
 }
 kmWritePointer(0x808d3e6c, BooCtrlRaceNameBalloonDraw);
 
+static void PreserveInventoryState2BAndApply(Item::PlayerInventory& inventory, void (Item::PlayerInventory::*fn)()) {
+    u8 preservedState2B = reinterpret_cast<u8*>(&inventory)[0x2B];
+    (inventory.*fn)();
+    reinterpret_cast<u8*>(&inventory)[0x2B] = preservedState2B;
+}
+
 static void CompleteItemSteal(u8 stealerId) {
     if (stealerId >= 12) return;
     Item::Manager* mgr = Item::Manager::sInstance;
@@ -521,6 +544,8 @@ static void CompleteItemSteal(u8 stealerId) {
 
     u32 count = booStolenItemCount[stealerId];
     if (count == 0) count = 1;
+    Item::PlayerInventory& inventory = mgr->players[stealerId].inventory;
+    u8 preservedState2B = reinterpret_cast<u8*>(&inventory)[0x2B];
     mgr->players[stealerId].inventory.SetItemWithCount(booStolenItem[stealerId], count, false);
 
     if (DriverMgr::isOnlineRace && !mgr->players[stealerId].isRemote) {
@@ -597,8 +622,10 @@ void UseBoo(Item::Player& itemPlayer) {
             victimId < itemMgr->playerCount && !itemMgr->players[victimId].isRemote) {
             ItemId victimCur = GetPlayerItem(victimId);
             if (victimCur != ITEM_NONE && victimCur != POW_BLOCK && victimCur != BOO) {
-
-                itemMgr->players[victimId].inventory.ClearAllAndDestroyDropItems();
+                PreserveInventoryState2BAndApply(
+                    itemMgr->players[victimId].inventory,
+                    &Item::PlayerInventory::ClearAllAndDestroyDropItems
+                );
 
                 const RacedataPlayer& victimRacePlayer = Racedata::sInstance->racesScenario.players[victimId];
                 if (victimRacePlayer.playerType == PLAYER_REAL_LOCAL) {
@@ -676,7 +703,10 @@ void ApplyBooRemoteEffect(u8 playerId) {
             victimId < itemMgr->playerCount && !itemMgr->players[victimId].isRemote) {
             ItemId victimCur = GetPlayerItem(victimId);
             if (victimCur != ITEM_NONE && victimCur != POW_BLOCK && victimCur != BOO) {
-                itemMgr->players[victimId].inventory.ClearAllAndDestroyDropItems();
+                PreserveInventoryState2BAndApply(
+                    itemMgr->players[victimId].inventory,
+                    &Item::PlayerInventory::ClearAllAndDestroyDropItems
+                );
 
                 const RacedataPlayer& victimRacePlayer = Racedata::sInstance->racesScenario.players[victimId];
                 if (victimRacePlayer.playerType == PLAYER_REAL_LOCAL) {
@@ -759,12 +789,18 @@ static void UpdateBooStates() {
             booActive[i] = false;
         }
 
-        SetBooEffectsVisibility(i, !hasBoo, !IsLocalRacePlayer(i));
+        const bool hideCompletely = CanHideBooPlayerCompletely(i);
+        SetBooEffectsVisibility(i, !hasBoo, hideCompletely);
 
-        if (hasBoo != wasInBoo[i]) {
-            wasInBoo[i] = hasBoo;
-            ApplyGhostTransparency(kartPlayer->pointers, hasBoo, !IsLocalRacePlayer(i));
+        const u8 visual = !hasBoo ? BOO_VISUAL_NORMAL : (hideCompletely ? BOO_VISUAL_INVISIBLE : BOO_VISUAL_TRANSPARENT);
+        if (visual != booVisual[i]) {
+            ApplyBooVisual(kartPlayer->pointers, booVisual[i], visual);
+            booVisual[i] = visual;
         }
+        else if (visual == BOO_VISUAL_INVISIBLE) {
+            SetBooKartModelsVisible(kartPlayer->pointers, false);
+        }
+        wasInBoo[i] = hasBoo;
     }
 }
 RaceFrameHook BooUpdate(UpdateBooStates);
@@ -783,7 +819,8 @@ kmCall(0x8057a13c, ConditionalUpdateOffroad);
 
 static void BooCheckPlayerCollision(Kart::Collision& collision, const Kart::Player& other) {
     Kart::Manager* mgr = Kart::Manager::sInstance;
-    if (IsBooModeActive() && mgr != nullptr) {
+    if (System::sInstance->IsContext(PULSAR_MODE_OTT)) return;
+    else if (IsBooModeActive() && mgr != nullptr) {
         u8 otherIdx = other.GetPlayerIdx();
         if (otherIdx < 12 && booActive[otherIdx]) return;
 
@@ -886,6 +923,7 @@ void ResetBooStates() {
         booActive[i] = false;
         booTimers[i] = 0;
         wasInBoo[i] = false;
+        booVisual[i] = BOO_VISUAL_NORMAL;
         booStealing[i] = false;
         booStealTimers[i] = 0;
         booStolenVictim[i] = 0xFF;

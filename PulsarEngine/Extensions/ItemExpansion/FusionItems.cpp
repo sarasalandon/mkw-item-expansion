@@ -9,7 +9,7 @@
 #include <PulsarSystem.hpp>
 
 // Expanded behaviourTable in mod BSS (from ItemSlotExpansion.cpp)
-extern "C" Item::Behavior expandedBehaviourTable[27];
+extern "C" Item::Behavior expandedBehaviourTable[ITEM_MAX];
 
 namespace Pulsar {
 namespace Race {

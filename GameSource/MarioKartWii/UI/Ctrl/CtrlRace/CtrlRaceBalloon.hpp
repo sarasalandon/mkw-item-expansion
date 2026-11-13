@@ -44,12 +44,11 @@ class CtrlRaceNameBalloon : public LayoutUIControl {
     void UpdateInfo(u8 hudSlotId);  // 807f0044
     void UpdatePosition(u8 nameSlotId);  // 807f1094
 
-    u8 unknown_0x174[0x17C - 0x174];
     bool isOnline;  // 0x174
     u8 hudSlotId;  // 0x175
     u8 playerCount;  // 0x176
     u8 unknown_0x177;
-    u32 nameSlotId;  // 0x178 from the associated raceballoons, get the id of the name currently displayed
+    s32 playerId;  // 0x178 player whose name this balloon is showing, -1 = none
     RaceBalloons* balloonClass;  // 0x17C
     nw4r::lyt::Pane* chase_name_null;  // 0x180
     nw4r::lyt::Pane* line;  // 0x184
