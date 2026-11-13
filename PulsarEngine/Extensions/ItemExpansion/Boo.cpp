@@ -482,7 +482,7 @@ static void ApplyBooVisual(Kart::Pointers& pointers, u8 from, u8 to) {
     SetModelDrawPriority modelFn = { priority };
     ForEachKartPart(pointers, partFn);
     ForEachDriverModel(pointers, modelFn);
-t.
+
     if (to == BOO_VISUAL_INVISIBLE) SetBooKartModelsVisible(pointers, false);
     else if (from == BOO_VISUAL_INVISIBLE) SetBooKartModelsVisible(pointers, true);
 
@@ -949,6 +949,11 @@ asmFunc EnableBooOpacity() {
     ASM(
     nofralloc;
     lwz r3, 0x30 (r3);
+    lwz r0, 0xB70 (r5);
+    cmpwi r0, 0xB;
+    beqlr;
+    cmpwi r0, 0xC;
+    beqlr;
     ori r4, r4, 0x1;
     blr;
     )
