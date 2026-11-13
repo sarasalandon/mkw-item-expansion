@@ -5,7 +5,6 @@
 #include <core/nw4r/snd/SoundArchivePlayer.hpp>
 #include <PulsarSystem.hpp>
 #include <Gamemodes/KO/KOMgr.hpp>
-#include <Gamemodes/LapKO/LapKOMgr.hpp>
 #include <MarioKartWii/Race/RaceInfo/RaceInfo.hpp>
 #include <include/c_math.h>
 #include <MarioKartWii/Kart/KartManager.hpp>
