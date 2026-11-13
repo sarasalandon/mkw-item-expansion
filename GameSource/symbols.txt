@@ -2214,3 +2214,4 @@ Vtable_CtrlRaceNameBalloon_Draw = 0x808d3e6c
 Toggle__Q27Effects6PlayerFb = 0x80693d58
 KillEffects__Q27Effects6PlayerFb = 0x806958f4
 UpdateGasSmokeEffects__Q27Effects6PlayerFv = 0x8069baf8
+Pul_SendItemUseEvent = 0x8079c220
