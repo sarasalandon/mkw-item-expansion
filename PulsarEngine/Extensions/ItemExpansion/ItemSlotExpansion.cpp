@@ -9,13 +9,17 @@
 #include <MarioKartWii/RKNet/ITEM.hpp>
 #include <Extensions/ItemExpansion/ItemProbabilities.hpp>
 #include <Extensions/ItemExpansion/ItemObjDrop.hpp>
+#include <Extensions/ItemExpansion/FireFlower.hpp>
+#include <Extensions/ItemExpansion/Boomerang.hpp>
 
 static const u32 ORIGINAL_ITEM_COUNT = 19;
-static const u32 EXPANDED_ITEM_COUNT = 27;
+static const u32 EXPANDED_ITEM_COUNT = ITEM_MAX;
+
+typedef char ItemProbsCountMatchesItemMax[(ItemProbs::ITEM_COUNT == EXPANDED_ITEM_COUNT) ? 1 : -1];
 
 extern "C" {
-    Item::Behavior expandedBehaviourTable[27];
-    u16 expandedAccumulator[27];
+    Item::Behavior expandedBehaviourTable[EXPANDED_ITEM_COUNT];
+    u16 expandedAccumulator[EXPANDED_ITEM_COUNT];
 }
 
 extern "C" void* __nwa__FUl(u32 size);
@@ -193,6 +197,8 @@ kmWrite32(0x8065e0bc, 0x60000000);  // NOP the lis r31, 0x809c
 kmBranch(0x8065e0d8, UpdateItemSumsTableHook);
 kmPatchExitPoint(UpdateItemSumsTableHook, 0x8065e0dc);
 
+typedef char ScaleTableHooksWrittenFor29Items[(EXPANDED_ITEM_COUNT == 29) ? 1 : -1];
+
 asmFunc ScaleTableCopyHook() {
     ASM(
     nofralloc;
@@ -212,7 +218,11 @@ asmFunc ScaleTableCopyHook() {
     sth r0, 0x32(r7);
     lhz r0, 0x34(r4);
     sth r0, 0x34(r7);
-    addi r7, r7, 0x36;
+    lhz r0, 0x36(r4);
+    sth r0, 0x36(r7);
+    lhz r0, 0x38(r4);
+    sth r0, 0x38(r7);
+    addi r7, r7, 0x3A;
     blr;
     )
 }
@@ -230,7 +240,9 @@ asmFunc ScaleTableClearHook() {
     sth r3, 0x30(r4);
     sth r3, 0x32(r4);
     sth r3, 0x34(r4);
-    addi r4, r4, 0x36;
+    sth r3, 0x36(r4);
+    sth r3, 0x38(r4);
+    addi r4, r4, 0x3A;
     blr;
     )
 }
@@ -333,33 +345,37 @@ kmWrite32(0x807bc898, 0x60000000);
 kmBranch(0x807bc89c, InventoryTickTableHook2);
 kmPatchExitPoint(InventoryTickTableHook2, 0x807bc8a0);
 
+static const u32 ROW_STRIDE = EXPANDED_ITEM_COUNT * 2;
+static const u32 ROULETTE_ITEMS_SIZE = 4 + EXPANDED_ITEM_COUNT * 4;
+static const u32 ROULETTE_POOL_SIZE = 12 * ROULETTE_ITEMS_SIZE + 0x10;
+
 // --- Item::ItemSlotData::Init (0x807baf48) ---
-kmWrite32(0x807baf5c, 0x38600070);
-kmWrite32(0x807baf80, 0x38600550);   
-kmWrite32(0x807baf94, 0x38C00070);
-kmWrite32(0x807bb284, 0x1C7D0070);
-kmWrite32(0x807bb2a0, 0x38C00070);
-kmWrite32(0x807bb338, 0x2C0A001B);  
-kmWrite32(0x807bb340, 0x38C60036);
-kmWrite32(0x807bb344, 0x38E70070);
+kmWrite32(0x807baf5c, 0x38600000 | ROULETTE_ITEMS_SIZE);
+kmWrite32(0x807baf80, 0x38600000 | ROULETTE_POOL_SIZE);
+kmWrite32(0x807baf94, 0x38C00000 | ROULETTE_ITEMS_SIZE);
+kmWrite32(0x807bb284, 0x1C7D0000 | ROULETTE_ITEMS_SIZE);
+kmWrite32(0x807bb2a0, 0x38C00000 | ROULETTE_ITEMS_SIZE);
+kmWrite32(0x807bb338, 0x2C0A0000 | EXPANDED_ITEM_COUNT);
+kmWrite32(0x807bb340, 0x38C60000 | ROW_STRIDE);
+kmWrite32(0x807bb344, 0x38E70000 | ROULETTE_ITEMS_SIZE);
 
 // --- ProcessTable (0x807ba9d8) ---
-kmWrite32(0x807baa20, 0x1C7F0036);
-kmWrite32(0x807bacc0, 0x38C60036);
-kmWrite32(0x807bacc4, 0x38E70070);
+kmWrite32(0x807baa20, 0x1C7F0000 | ROW_STRIDE);
+kmWrite32(0x807bacc0, 0x38C60000 | ROW_STRIDE);
+kmWrite32(0x807bacc4, 0x38E70000 | ROULETTE_ITEMS_SIZE);
 
 // --- DecideItem (0x807bb42c) ---
-kmWrite32(0x807bb620, 0x1C640036);
-kmWrite32(0x807bb6a8, 0x3B60001B);
-kmWrite32(0x807bb6b0, 0x3B60001B);
+kmWrite32(0x807bb620, 0x1C640000 | ROW_STRIDE);
+kmWrite32(0x807bb6a8, 0x3B600000 | EXPANDED_ITEM_COUNT);
+kmWrite32(0x807bb6b0, 0x3B600000 | EXPANDED_ITEM_COUNT);
 
 // --- calcRandomItem / DecideRouletteItem (0x807bb8d0) ---
-kmWrite32(0x807bb8f8, 0x1C000070);
-kmWrite32(0x807bb954, 0x1C000070);
+kmWrite32(0x807bb8f8, 0x1C000000 | ROULETTE_ITEMS_SIZE);
+kmWrite32(0x807bb954, 0x1C000000 | ROULETTE_ITEMS_SIZE);
 
 // --- PostProcessVSTable / scaleTable (0x807bad20) ---
-kmWrite32(0x807bad5c, 0x1C000036);
-kmWrite32(0x807bae0c, 0x1C890036);
+kmWrite32(0x807bad5c, 0x1C000000 | ROW_STRIDE);
+kmWrite32(0x807bae0c, 0x1C890000 | ROW_STRIDE);
 
 static void InitExpandedItemBehaviours() {
     memcpy(expandedBehaviourTable, Item::Behavior::behaviourTable, 
@@ -383,6 +399,14 @@ RaceLoadHook InitExpanded(InitExpandedItemBehaviours);
 
 static void ExpandedLoseItemFromDmg(Item::PlayerInventory& inventory) {
     ItemId itemId = inventory.currentItemId;
+    if (itemId == FIRE_FLOWER) {
+        Pulsar::Race::LoseFireFlower(inventory);
+        return;
+    }
+    if (itemId == BOOMERANG) {
+        Pulsar::Race::LoseBoomerang(inventory);
+        return;
+    }
     if (itemId == BOO || itemId == FEATHER) {
         Item::Player* player = inventory.itemPlayer;
         const Vec3& pos = player->GetPosition();
@@ -402,7 +426,9 @@ kmCall(0x80798aac, ExpandedLoseItemFromDmg);
 
 static void ConditionalEjectItems(Item::PlayerInventory& inventory) {
     ItemId itemId = inventory.currentItemId;
-    if (itemId == BOO || itemId == FEATHER) {
+    if (itemId == FIRE_FLOWER) Pulsar::Race::LoseFireFlower(inventory);
+    else if (itemId == BOOMERANG) Pulsar::Race::LoseBoomerang(inventory);
+    else if (itemId == BOO || itemId == FEATHER) {
         Item::Player* player = inventory.itemPlayer;
         const Vec3& pos = player->GetPosition();
         u8 playerId = player->id;
@@ -431,6 +457,12 @@ extern "C" bool ExpandedCapacityCheck(ItemId id) {
         u32 inPlay = Pulsar::Race::CountPlayersHoldingItem(FEATHER)
                    + Pulsar::Race::GetActiveDropCount(FEATHER);
         return inPlay < Pulsar::Race::FEATHER_MAX_COUNT;
+    }
+    // No game holder backs objIds 0x14 and 0x15, so the vanilla check would read past itemObjHolders
+    if (id == FIRE_FLOWER) return Pulsar::Race::CountPlayersHoldingItem(FIRE_FLOWER) < Pulsar::Race::FIRE_FLOWER_MAX_HELD;
+    if (id == BOOMERANG) {
+        const u32 inPlay = Pulsar::Race::CountPlayersHoldingItem(BOOMERANG) + Pulsar::Race::CountBoomerangsComingBack();
+        return inPlay < Pulsar::Race::BOOMERANG_MAX_HELD;
     }
     return Item::Manager::IsThereCapacityForItem(id);
 }
@@ -494,11 +526,6 @@ kmPatchExitPoint(DecideItemObjCapacityHook, 0x807bb7e0);
 
 static void UpdateItemStatusAndSumsExpanded(RKNet::ITEMHandler* handler) {
     handler->UpdateItemStatusAndSums();
-    // Force all item statuses to ACKED (1). The vanilla function does OOB reads on
-    // the original 19-entry behavior table for expanded item IDs (21+), producing
-    // garbage counts that exceed capacity limits and cause status=2 (NEEDS_ACK/rejected).
-    // Capacity is already enforced at roulette time via ExpandedCapacityCheck, so
-    // the ITEM handshake should always accept the chosen item.
     for (u32 i = 0; i < 12; i++) {
         handler->itemStatus[i] = 1;
     }

@@ -27,6 +27,8 @@
  *                                                  24 = Shroom Star
  *                                                  25 = Green Shell Mushroom
  *                                                  26 = Bob-omb Mushroom
+ *                                                  27 = Fire Flower
+ *                                                  28 = Boomerang
  *
  * TABLE ORDER IN BINARY (must match vanilla for Init to parse correctly):
  *    0: GRAND_PRIX_PLAYER   4: VERSUS_ONLINE     8: COIN_PLAYER
@@ -40,7 +42,7 @@
 
 namespace ItemProbs {
 
-static const u32 ITEM_COUNT = 27;
+static const u32 ITEM_COUNT = 29;  // must equal ITEM_MAX (Identifiers.hpp); ItemSlotExpansion.cpp checks it
 static const u32 TABLE_COUNT = 12;
 
 //     1st  2nd  3rd  4th  5th  6th  7th  8th  9th 10th 11th 12th
@@ -72,6 +74,8 @@ static const u8 GRAND_PRIX_PLAYER[ITEM_COUNT][12] = {
     {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 24: Shroom Star
     {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 25: Green Shell Mushroom
     {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 26: Bob-omb Mushroom
+    {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 27: Fire Flower
+    {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 28: Boomerang
 };
 
 //     1st  2nd  3rd  4th  5th  6th  7th  8th  9th 10th 11th 12th
@@ -103,6 +107,8 @@ static const u8 GRAND_PRIX_ENEMY[ITEM_COUNT][12] = {
     {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 24: Shroom Star
     {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 25: Green Shell Mushroom
     {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 26: Bob-omb Mushroom
+    {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 27: Fire Flower
+    {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 28: Boomerang
 };
 
 //     1st  2nd  3rd  4th  5th  6th  7th  8th  9th 10th 11th 12th
@@ -134,6 +140,8 @@ static const u8 VERSUS_PLAYER[ITEM_COUNT][12] = {
     {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 24: Shroom Star
     {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 25: Green Shell Mushroom
     {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 26: Bob-omb Mushroom
+    {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 27: Fire Flower
+    {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 28: Boomerang
 };
 
 //     1st  2nd  3rd  4th  5th  6th  7th  8th  9th 10th 11th 12th
@@ -165,6 +173,8 @@ static const u8 VERSUS_ENEMY[ITEM_COUNT][12] = {
     {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 24: Shroom Star
     {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 25: Green Shell Mushroom
     {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 26: Bob-omb Mushroom
+    {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 27: Fire Flower
+    {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 28: Boomerang
 };
 
 //     1st  2nd  3rd  4th  5th  6th  7th  8th  9th 10th 11th 12th
@@ -196,6 +206,8 @@ static const u8 VERSUS_ONLINE[ITEM_COUNT][12] = {
     {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 24: Shroom Star
     {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 25: Green Shell Mushroom
     {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 26: Bob-omb Mushroom
+    {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 27: Fire Flower
+    {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 28: Boomerang
 };
 
 static const u8 SPECIAL[ITEM_COUNT][16] = {
@@ -226,6 +238,8 @@ static const u8 SPECIAL[ITEM_COUNT][16] = {
     {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 24: Shroom Star
     {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 25: Green Shell Mushroom
     {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 26: Bob-omb Mushroom
+    {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 27: Fire Flower
+    {   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0 }, // 28: Boomerang
 };
 
 static const u8 BALLOON_PLAYER[ITEM_COUNT][3] = {
@@ -256,6 +270,8 @@ static const u8 BALLOON_PLAYER[ITEM_COUNT][3] = {
     {   0,   0,   0 }, // 24: Shroom Star
     {   0,   0,   0 }, // 25: Green Shell Mushroom
     {   0,   0,   0 }, // 26: Bob-omb Mushroom
+    {   0,   0,   0 }, // 27: Fire Flower
+    {   0,   0,   0 }, // 28: Boomerang
 };
 
 static const u8 BALLOON_ENEMY[ITEM_COUNT][3] = {
@@ -286,6 +302,8 @@ static const u8 BALLOON_ENEMY[ITEM_COUNT][3] = {
     {   0,   0,   0 }, // 24: Shroom Star
     {   0,   0,   0 }, // 25: Green Shell Mushroom
     {   0,   0,   0 }, // 26: Bob-omb Mushroom
+    {   0,   0,   0 }, // 27: Fire Flower
+    {   0,   0,   0 }, // 28: Boomerang
 };
 
 static const u8 COIN_PLAYER[ITEM_COUNT][3] = {
@@ -316,6 +334,8 @@ static const u8 COIN_PLAYER[ITEM_COUNT][3] = {
     {   0,   0,   0 }, // 24: Shroom Star
     {   0,   0,   0 }, // 25: Green Shell Mushroom
     {   0,   0,   0 }, // 26: Bob-omb Mushroom
+    {   0,   0,   0 }, // 27: Fire Flower
+    {   0,   0,   0 }, // 28: Boomerang
 };
 
 static const u8 COIN_ENEMY[ITEM_COUNT][3] = {
@@ -346,6 +366,8 @@ static const u8 COIN_ENEMY[ITEM_COUNT][3] = {
     {   0,   0,   0 }, // 24: Shroom Star
     {   0,   0,   0 }, // 25: Green Shell Mushroom
     {   0,   0,   0 }, // 26: Bob-omb Mushroom
+    {   0,   0,   0 }, // 27: Fire Flower
+    {   0,   0,   0 }, // 28: Boomerang
 };
 
 static const u8 BALLOON_ONLINE[ITEM_COUNT][3] = {
@@ -376,6 +398,8 @@ static const u8 BALLOON_ONLINE[ITEM_COUNT][3] = {
     {   0,   0,   0 }, // 24: Shroom Star
     {   0,   0,   0 }, // 25: Green Shell Mushroom
     {   0,   0,   0 }, // 26: Bob-omb Mushroom
+    {   0,   0,   0 }, // 27: Fire Flower
+    {   0,   0,   0 }, // 28: Boomerang
 };
 
 static const u8 COIN_ONLINE[ITEM_COUNT][3] = {
@@ -406,6 +430,8 @@ static const u8 COIN_ONLINE[ITEM_COUNT][3] = {
     {   0,   0,   0 }, // 24: Shroom Star
     {   0,   0,   0 }, // 25: Green Shell Mushroom
     {   0,   0,   0 }, // 26: Bob-omb Mushroom
+    {   0,   0,   0 }, // 27: Fire Flower
+    {   0,   0,   0 }, // 28: Boomerang
 };
 
 struct TableDef {

@@ -112,7 +112,9 @@ enum ItemObjId {
     OBJ_BOO = 0x11,
     OBJ_FEATHER = 0x12,
     OBJ_SHROOM_STAR = 0x13,
-    OBJ_MAX = 0x14
+    OBJ_FIRE_FLOWER = 0x14,  // custom: never spawns a game Obj, the fireballs are Extensions/ItemExpansion/FireFlower.cpp's
+    OBJ_BOOMERANG = 0x15,    // custom: never spawns a game Obj, the boomerangs are Extensions/ItemExpansion/Boomerang.cpp's
+    OBJ_MAX = 0x16
 };
 
 enum ItemId {
@@ -143,7 +145,9 @@ enum ItemId {
     SHROOM_STAR = 0x18,
     GREEN_SHELL_MUSHROOM = 0x19,
     BOBOMB_MUSHROOM = 0x1A,
-    ITEM_MAX = 0x1B
+    FIRE_FLOWER = 0x1B,          //Extensions/ItemExpansion/FireFlower.cpp
+    BOOMERANG = 0x1C,            //Extensions/ItemExpansion/Boomerang.cpp
+    ITEM_MAX = 0x1D
 };
 
 enum CourseId {

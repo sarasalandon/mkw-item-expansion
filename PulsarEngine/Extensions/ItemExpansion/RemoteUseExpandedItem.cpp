@@ -12,24 +12,13 @@
 #include <Extensions/ItemExpansion/ItemObjDrop.hpp>
 #include <Extensions/ItemExpansion/Boo.hpp>
 #include <Extensions/ItemExpansion/Feather.hpp>
+#include <Extensions/ItemExpansion/FireFlower.hpp>
+#include <Extensions/ItemExpansion/Boomerang.hpp>
 #include <PulsarSystem.hpp>
 
 namespace Pulsar {
 namespace Race {
 
-// Custom item uses (Boo, Feather, Shroom-Star) and drops are sent as a vanilla Mushroom USE EVENT, because the EVENT
-// type field is 5 bits and 0x10 (OBJ_NONE) already means "empty slot", so OBJ_BOO and later can't go on the wire.
-//
-// A USE entry is always 3 bytes (EVENTHandler::ImportReceivedEntries sizes entries by type, 0x8079d76c):
-// [sender's frameOfInput u16][1 data byte]. Vanilla's data byte is the playerId (0-11), so the top bit marks ours:
-//     0x80 | (kind << 4) | playerId
-//
-// The first two bytes MUST be the real frame. The old encoding put 0xFF, objId there, i.e. a "timestamp" of 0xFFxx.
-// The received-entry dedup in ItemRain.cpp (0x8065BDF8, CTGP's C265BDF8, installed in rain races) never overwrites a slot whose stored
-// timestamp is newer, so once a custom event had used one of a player's 24 send slots, every later EVENT they sent in
-// that slot (a Mushroom, a red shell break, a shot...) was processed with the stale custom payload. That made a
-// Mushroom replay the last Boo/Feather, left red shells unbroken on other screens until they timed out, and fed
-// garbage player ids to the shell/cloud handlers. vanilla sendItemUseEvent writes the frame itself.
 extern "C" void* Pul_SendItemUseEvent(ItemObjId objId, u8 data);
 
 enum CustomEventKind {
@@ -38,14 +27,20 @@ enum CustomEventKind {
     CUSTOM_EVENT_SHROOM_STAR_USE,
     CUSTOM_EVENT_BOO_DROP,
     CUSTOM_EVENT_FEATHER_DROP,
+    CUSTOM_EVENT_FIREBALL_FORWARD,
+    CUSTOM_EVENT_FIREBALL_BACKWARD,
+    CUSTOM_EVENT_BOOMERANG_FORWARD,
+    CUSTOM_EVENT_BOOMERANG_BACKWARD,
     CUSTOM_EVENT_KIND_COUNT
 };
 static const u8 CUSTOM_EVENT_FLAG = 0x80;
+static const u8 CUSTOM_EVENT_PLAYERS = 12;
+typedef char CustomEventKindsFitInDataByte[(CUSTOM_EVENT_KIND_COUNT * CUSTOM_EVENT_PLAYERS <= 0x80) ? 1 : -1];
 
 static void SendCustomEvent(CustomEventKind kind, u8 playerId) {
-    if (playerId >= 12) return;
-    if (RKNet::PacketMgr::sInstance == nullptr || Item::EVENTBuffer::sInstance == nullptr) return; // not online
-    Pul_SendItemUseEvent(OBJ_MUSHROOM, static_cast<u8>(CUSTOM_EVENT_FLAG | (kind << 4) | playerId));
+    if (playerId >= CUSTOM_EVENT_PLAYERS) return;
+    if (RKNet::PacketMgr::sInstance == nullptr || Item::EVENTBuffer::sInstance == nullptr) return;
+    Pul_SendItemUseEvent(OBJ_MUSHROOM, static_cast<u8>(CUSTOM_EVENT_FLAG | (kind * CUSTOM_EVENT_PLAYERS + playerId)));
 }
 
 void SendEncodedCustomUseEvent(ItemObjId realObjId, u8 playerId) {
@@ -59,14 +54,24 @@ void SendEncodedCustomDropEvent(ItemId dropType, u8 playerId) {
     else if (dropType == FEATHER) SendCustomEvent(CUSTOM_EVENT_FEATHER_DROP, playerId);
 }
 
+void SendEncodedFireballEvent(u8 playerId, bool backward) {
+    SendCustomEvent(backward ? CUSTOM_EVENT_FIREBALL_BACKWARD : CUSTOM_EVENT_FIREBALL_FORWARD, playerId);
+}
+
+void SendEncodedBoomerangEvent(u8 playerId, bool backward, bool lastThrow) {
+    const CustomEventKind kind = backward ? CUSTOM_EVENT_BOOMERANG_BACKWARD : CUSTOM_EVENT_BOOMERANG_FORWARD;
+    SendCustomEvent(kind, playerId);
+    if (lastThrow) SendCustomEvent(kind, playerId);
+}
+
 static bool InterceptCustomRecvEVENT(Item::ObjHolder* holder, RKNet::EVENTAction action, u16 unk2,
                                       const Item::EVENTBuffer::Entry& entry, u32 time, bool flag) {
     ItemObjId objId = entry.objId;
 
-    // entry.data is the raw payload: [frame u16][data byte]
     if (objId == OBJ_MUSHROOM && action == RKNet::EVENTACTION_USE && (entry.data[2] & CUSTOM_EVENT_FLAG) != 0) {
-        const u8 kind = (entry.data[2] >> 4) & 0x7;
-        const u8 playerId = entry.data[2] & 0xF;
+        const u8 code = entry.data[2] & ~CUSTOM_EVENT_FLAG;
+        const u8 kind = code / CUSTOM_EVENT_PLAYERS;
+        const u8 playerId = code % CUSTOM_EVENT_PLAYERS;
         Item::Manager* mgr = Item::Manager::sInstance;
         if (mgr == nullptr || playerId >= mgr->playerCount || kind >= CUSTOM_EVENT_KIND_COUNT) return false;
         Item::Player& player = mgr->players[playerId];
@@ -83,11 +88,20 @@ static bool InterceptCustomRecvEVENT(Item::ObjHolder* holder, RKNet::EVENTAction
                 break;
             case CUSTOM_EVENT_BOO_DROP:
             case CUSTOM_EVENT_FEATHER_DROP:
-                // Locally-authored drops are already spawned on this console.
                 if (player.isRemote) {
                     EjectDroppedItem(kind == CUSTOM_EVENT_BOO_DROP ? BOO : FEATHER, player.GetPosition(), playerId);
                 }
                 break;
+            case CUSTOM_EVENT_FIREBALL_FORWARD:
+            case CUSTOM_EVENT_FIREBALL_BACKWARD:
+                if (player.isRemote) SpawnRemoteFireball(player, kind == CUSTOM_EVENT_FIREBALL_BACKWARD);
+                break;
+            case CUSTOM_EVENT_BOOMERANG_FORWARD:
+            case CUSTOM_EVENT_BOOMERANG_BACKWARD: {
+                const u16 stamp = static_cast<u16>((entry.data[0] << 8) | entry.data[1]);
+                if (player.isRemote) SpawnRemoteBoomerang(player, kind == CUSTOM_EVENT_BOOMERANG_BACKWARD, stamp);
+                break;
+            }
         }
         return false;
     }

@@ -152,6 +152,12 @@ const char* ChangeItemWindowPane(ItemId id, u32 itemCount) {
     else if (id == BOBOMB_MUSHROOM) {
         paneName = "bobomb_mushroom"; //this is custom to you
     }
+    else if (id == FIRE_FLOWER) {
+        paneName = "fire_flower"; //this is custom to you
+    }
+    else if (id == BOOMERANG) {
+        paneName = "boomerang"; //this is custom to you
+    }
     else if (id == THUNDER_CLOUD && megaTC && RKNet::Controller::sInstance->roomType != RKNet::ROOMTYPE_VS_WW) paneName = "megaTC";
     else paneName = GetItemIconPaneName(id, itemCount);
     return paneName;
